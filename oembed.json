@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "type": "rich",
+  "provider_name": "DragDrop",
+  "provider_url": "https://warm-lamington-56677d.netlify.app",
+  "title": "Upload to Google Drive",
+  "html": "<iframe src=\"https://warm-lamington-56677d.netlify.app/embed.html\" width=\"600\" height=\"400\" frameborder=\"0\" allowfullscreen></iframe>",
+  "width": 600,
+  "height": 400
+}
