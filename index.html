@@ -4,13 +4,9 @@
   <meta charset="UTF-8">
   <title>Upload to Google Drive</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
     html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
+      margin: 0; padding: 0; height: 100%;
       font-family: 'Segoe UI', sans-serif;
       background: #f5f7fa;
       display: flex;
@@ -77,6 +73,7 @@
     const CLIENT_ID = '608102270412-d1tjhndp3q70b1huig7ulqdmh4uobi5i.apps.googleusercontent.com';
     const API_KEY = 'AIzaSyDWC0fqICusytSBgOqFqtQx0EGpVGP5AFY';
     const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+    const FOLDER_ID = '14EnU_hvEmBzyok_TnwVO5ryKpYpAelcJ'; // Replace with your target folder ID
 
     const dropzone = document.getElementById('dropzone');
     const fileListEl = document.getElementById('fileList');
@@ -129,39 +126,39 @@
             });
             const authInstance = gapi.auth2.getAuthInstance();
             if (!authInstance.isSignedIn.get()) {
-              await authInstance.signIn();
+              await authInstance.signIn({ prompt: 'select_account' });
             }
             resolve();
           } catch (error) {
-            alert('Authentication failed: ' + error.message);
+            console.error('Authentication Error:', error);
+            alert('Authentication failed. See console for details.');
             reject(error);
           }
         });
       });
     }
-    
-async function uploadFile(file) {
-  const metadata = {
-    name: file.name,
-    mimeType: file.type,
-    parents: ['14EnU_hvEmBzyok_TnwVO5ryKpYpAelcJ'] // Your folder ID
-  };
 
-  const accessToken = gapi.auth.getToken().access_token;
+    async function uploadFile(file) {
+      const metadata = {
+        name: file.name,
+        mimeType: file.type,
+        parents: [FOLDER_ID] // Upload to specific folder
+      };
 
-  const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  form.append('file', file);
+      const accessToken = gapi.auth.getToken().access_token;
 
-  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-    method: 'POST',
-    headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
-    body: form
-  });
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', file);
 
-  return res.json();
-}
+      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+        method: 'POST',
+        headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+        body: form
+      });
 
+      return res.json();
+    }
 
     uploadBtn.addEventListener('click', async () => {
       if (selectedFiles.length === 0) return;
@@ -179,7 +176,8 @@ async function uploadFile(file) {
         fileListEl.innerHTML = '';
         selectedFiles = [];
       } catch (err) {
-        alert('Upload failed: ' + err.message);
+        alert('Upload failed. See console for details.');
+        console.error('Upload error:', err);
       } finally {
         uploadBtn.textContent = 'Upload to Google Drive';
         uploadBtn.disabled = false;
