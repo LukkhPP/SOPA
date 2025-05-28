@@ -1,4 +1,5 @@
 /*
+  Content-Type: application/json
   Content-Security-Policy: frame-ancestors 'self' https://www.canva.com;
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer-when-downgrade
