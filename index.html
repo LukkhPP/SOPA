@@ -74,8 +74,8 @@
 
   <script src="https://apis.google.com/js/api.js"></script>
   <script>
-    const CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
-    const API_KEY = 'YOUR_API_KEY';
+    const CLIENT_ID = '608102270412-d1tjhndp3q70b1huig7ulqdmh4uobi5i.apps.googleusercontent.com';
+    const API_KEY = 'AIzaSyDWC0fqICusytSBgOqFqtQx0EGpVGP5AFY';
     const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
     const dropzone = document.getElementById('dropzone');
@@ -139,27 +139,29 @@
         });
       });
     }
+    
+async function uploadFile(file) {
+  const metadata = {
+    name: file.name,
+    mimeType: file.type,
+    parents: ['14EnU_hvEmBzyok_TnwVO5ryKpYpAelcJ'] // Your folder ID
+  };
 
-    async function uploadFile(file) {
-      const metadata = {
-        name: file.name,
-        mimeType: file.type
-      };
+  const accessToken = gapi.auth.getToken().access_token;
 
-      const accessToken = gapi.auth.getToken().access_token;
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', file);
 
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-      form.append('file', file);
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST',
+    headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
+    body: form
+  });
 
-      const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-        method: 'POST',
-        headers: new Headers({ 'Authorization': 'Bearer ' + accessToken }),
-        body: form
-      });
+  return res.json();
+}
 
-      return res.json();
-    }
 
     uploadBtn.addEventListener('click', async () => {
       if (selectedFiles.length === 0) return;
