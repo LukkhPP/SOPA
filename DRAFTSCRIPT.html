@@ -72,6 +72,34 @@
       top: 15px;
       left: 15px;
     }
+    
+    
+    .modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.modal-content {
+  background: white;
+  padding: 40px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  text-align: center;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
   </style>
   <!-- Load Google Identity Services (GIS) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -88,6 +116,13 @@
     <ul class="file-list" id="fileList"></ul>
     <button id="uploadBtn" disabled>Upload to Google Drive</button>
   </div>
+
+    <div id="successModal" class="modal">
+  <div class="modal-content">
+    <h2>Upload Successful!</h2>
+    <p>Your file(s) were uploaded to Google Drive.</p>
+  </div>
+</div>
 
   <script src="https://apis.google.com/js/api.js"></script>
   <script>
@@ -220,9 +255,10 @@
 
         for (const file of selectedFiles) {
           const result = await uploadFile(file);
-          console.log('Uploaded:', result);
+          //console.log('Uploaded:', result);
         }
-        alert('Upload complete!');
+        showSuccessModal();
+        //alert('Upload complete!');
         selectedFiles = [];
         fileListEl.innerHTML = '';
         uploadBtn.disabled = true;
@@ -249,6 +285,14 @@
       if (selectedFiles.length === 0) return;
       requestAccessToken();
     });
+    function showSuccessModal() {
+    const modal = document.getElementById('successModal');
+    modal.style.display = 'flex';
+
+    setTimeout(() => {
+      modal.style.display = 'none';
+    }, 4000);
+  }
   </script>
 </body>
 </html>

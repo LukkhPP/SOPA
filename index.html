@@ -119,7 +119,7 @@
 
   <div id="successModal" class="modal">
   <div class="modal-content">
-    <h3>Upload Successful!</h3>
+    <h2>Upload Successful!</h2>
     <p>Your file(s) were uploaded to Google Drive.</p>
   </div>
 </div>
@@ -259,9 +259,9 @@
         for (const file of selectedFiles) {
           const result = await uploadFile(file);
           //console.log('Uploaded:', result);
-          showSuccessModal();
         }
-        alert('Upload complete!');
+        showSuccessModal();
+        //alert('Upload complete!');
         selectedFiles = [];
         fileListEl.innerHTML = '';
         uploadBtn.disabled = true;
