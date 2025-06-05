@@ -258,10 +258,10 @@
 
         for (const file of selectedFiles) {
           const result = await uploadFile(file);
-          console.log('Uploaded:', result);
+          //console.log('Uploaded:', result);
+          showSuccessModal();
         }
-        showSuccessModal();
-
+        alert('Upload complete!');
         selectedFiles = [];
         fileListEl.innerHTML = '';
         uploadBtn.disabled = true;
