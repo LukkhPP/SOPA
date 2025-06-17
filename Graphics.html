@@ -94,7 +94,7 @@
           });
 
           await fetchFiles(); // initial
-          setInterval(fetchFiles, 30000); // secure, not eval-based
+          setInterval(fetchFiles, 5000); // secure, not eval-based
         });
       } catch (error) {
         console.error('GAPI init error:', error);
