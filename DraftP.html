@@ -73,11 +73,29 @@
         files.forEach(file => {
           const li = document.createElement('li');
           const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
-          li.innerHTML = `
-            <img src="${file.iconLink}" style="vertical-align:middle; margin-right:10px;" />
-            <a href="${file.webViewLink}" target="_blank">${file.name}</a>
-            ${isFolder ? '📁' : ''}
-          `;
+
+          const img = document.createElement('img');
+          img.src = file.iconLink;
+          img.style.verticalAlign = 'middle';
+          img.style.marginRight = '10px';
+
+          const link = document.createElement('a');
+          link.href = '#';
+          link.textContent = file.name;
+          link.style.textDecoration = 'none';
+          link.onclick = (e) => {
+            e.preventDefault();
+            window.open(file.webViewLink, '_blank');
+          };
+
+          li.appendChild(img);
+          li.appendChild(link);
+
+          if (isFolder) {
+            const folderIcon = document.createTextNode(' 📁');
+            li.appendChild(folderIcon);
+          }
+
           fileList.appendChild(li);
         });
       } catch (error) {
