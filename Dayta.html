@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Public Google Drive Folder Viewer</title>
+  <script src="https://apis.google.com/js/api.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+    h2 {
+      text-align: center;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      margin: 10px 0;
+      background: #fff;
+      padding: 10px 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    a {
+      text-decoration: none;
+      color: #007bff;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>📂 Google Drive Folder Viewer</h2>
+  <ul id="fileList">Loading...</ul>
+
+  <script>
+    const API_KEY = 'AIzaSyDWC0fqICusytSBgOqFqtQx0EGpVGP5AFY';
+    const FOLDER_ID = '12NdCDs-u6UjjV2PWJWvsm0UrVruzmu';
+
+    let lastFileIds = new Set();
+
+    async function fetchFiles() {
+      try {
+        const response = await gapi.client.drive.files.list({
+          q: `'${FOLDER_ID}' in parents and trashed = false`,
+          fields: 'files(id, name, mimeType, webViewLink, iconLink)'
+        });
+
+        const files = response.result.files;
+        const fileList = document.getElementById('fileList');
+        const currentFileIds = new Set(files.map(file => file.id));
+
+        const isChanged =
+          files.length !== lastFileIds.size ||
+          [...currentFileIds].some(id => !lastFileIds.has(id));
+
+        if (!isChanged) return;
+
+        lastFileIds = currentFileIds;
+
+        fileList.innerHTML = '';
+
+        if (files.length === 0) {
+          fileList.innerHTML = '<li>No files or folders found.</li>';
+          return;
+        }
+
+        files.forEach(file => {
+          const li = document.createElement('li');
+          const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+
+          const img = document.createElement('img');
+          img.src = file.iconLink;
+          img.style.verticalAlign = 'middle';
+          img.style.marginRight = '10px';
+
+          const link = document.createElement('a');
+          link.href = '#';
+          link.textContent = file.name;
+          link.style.textDecoration = 'none';
+          link.onclick = (e) => {
+            e.preventDefault();
+            window.open(file.webViewLink, '_blank');
+          };
+
+          li.appendChild(img);
+          li.appendChild(link);
+
+          if (isFolder) {
+            const folderIcon = document.createTextNode(' 📁');
+            li.appendChild(folderIcon);
+          }
+
+          fileList.appendChild(li);
+        });
+      } catch (error) {
+        console.error('Error fetching files:', error);
+      }
+    }
+
+    async function initDriveViewer() {
+      try {
+        await gapi.load('client', async () => {
+          await gapi.client.init({
+            apiKey: API_KEY,
+            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+          });
+
+          await fetchFiles(); // initial
+          setInterval(fetchFiles, 5000); // secure, not eval-based
+        });
+      } catch (error) {
+        console.error('GAPI init error:', error);
+      }
+    }
+
+    window.addEventListener('load', initDriveViewer);
+  </script>
+</body>
+</html>
