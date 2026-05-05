@@ -866,6 +866,7 @@
         xhr.addEventListener('load', () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             setItemState(el, 'done');
+            fetchFiles();
             resolve(JSON.parse(xhr.responseText));
           } else {
             setItemState(el, 'error', `Error ${xhr.status}`);
