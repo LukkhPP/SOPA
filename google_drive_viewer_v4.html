@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Drive Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0f14; --surface: #151820; --surface2: #1c2030;
+      --border: rgba(255,255,255,0.07); --accent: #4f8cff; --accent2: #a78bfa;
+      --green: #34d399; --text: #e8eaf0; --muted: #6b7280;
+      --danger: #f87171; --warning: #fbbf24;
+    }
+    body { font-family: 'DM Mono', monospace; background: var(--bg); color: var(--text); min-height: 100vh; padding: 32px 24px; overflow-x: hidden; }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: linear-gradient(rgba(79,140,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(79,140,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px; pointer-events: none; z-index: 0;
+    }
+    .container { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; }
+    .header { display: flex; align-items: center; gap: 14px; margin-bottom: 32px; }
+    .header-icon { width: 44px; height: 44px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 0 24px rgba(79,140,255,0.35); }
+    .header-icon svg { width: 22px; height: 22px; }
+    .header-text h1 { font-family: 'Syne', sans-serif; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
+    .header-text p { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s ease-in-out infinite; margin-left: auto; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+    /* Drop Overlay */
+    .drop-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(13,15,20,0.85); backdrop-filter: blur(8px); opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
+    .drop-overlay.visible { opacity: 1; pointer-events: all; }
+    .drop-box { border: 2px dashed rgba(79,140,255,0.4); border-radius: 24px; padding: 56px 72px; text-align: center; background: var(--surface); transform: scale(0.96); transition: transform 0.2s ease, border-color 0.2s, box-shadow 0.2s; }
+    .drop-overlay.visible .drop-box { transform: scale(1); }
+    .drop-overlay.over .drop-box { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(79,140,255,0.15), 0 24px 60px rgba(0,0,0,0.5); }
+    .drop-box-icon { width: 64px; height: 64px; margin: 0 auto 20px; background: rgba(79,140,255,0.1); border-radius: 18px; display: flex; align-items: center; justify-content: center; color: var(--accent); transition: transform 0.2s; }
+    .drop-overlay.over .drop-box-icon { transform: translateY(-6px) scale(1.08); }
+    .drop-box-icon svg { width: 28px; height: 28px; }
+    .drop-box h2 { font-family: 'Syne', sans-serif; font-size: 1.2rem; font-weight: 800; margin-bottom: 6px; }
+    .drop-box p { font-size: 0.75rem; color: var(--muted); }
+    .drop-hint { margin-top: 10px; font-size: 0.68rem; color: rgba(107,114,128,0.6); letter-spacing: 0.05em; }
+
+    /* Upload Queue */
+    .upload-queue { margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; }
+    .upload-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; animation: slideIn 0.2s ease; transition: border-color 0.3s; }
+    .upload-item.success { border-color: rgba(52,211,153,0.35); }
+    .upload-item.error   { border-color: rgba(248,113,113,0.35); }
+    @keyframes slideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+    .upload-item-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .upload-item-info { flex: 1; min-width: 0; }
+    .upload-item-name { font-size: 0.78rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .upload-item-status { font-size: 0.66rem; color: var(--muted); margin-top: 3px; }
+    .upload-item-bar-wrap { height: 2px; background: rgba(255,255,255,0.06); border-radius: 2px; margin-top: 5px; overflow: hidden; }
+    .upload-item-bar { height: 100%; width: 0%; border-radius: 2px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.3s ease; }
+    .upload-item-badge { font-size: 0.65rem; padding: 2px 8px; border-radius: 20px; flex-shrink: 0; font-weight: 500; }
+    .badge-uploading { background: rgba(79,140,255,0.15); color: var(--accent); }
+    .badge-done      { background: rgba(52,211,153,0.15); color: var(--green); }
+    .badge-error     { background: rgba(248,113,113,0.15); color: var(--danger); }
+    .badge-waiting   { background: rgba(251,191,36,0.15); color: var(--warning); }
+    .upload-item-remove { background: none; border: none; color: var(--muted); cursor: pointer; padding: 2px; border-radius: 4px; display: flex; align-items: center; transition: color 0.2s; flex-shrink: 0; }
+    .upload-item-remove:hover { color: var(--danger); }
+    .upload-item-remove svg { width: 14px; height: 14px; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 28px; right: 28px; z-index: 200; background: var(--surface2); border: 1px solid rgba(52,211,153,0.3); border-radius: 14px; padding: 14px 20px; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); transform: translateY(20px); opacity: 0; transition: all 0.3s ease; pointer-events: none; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast-icon { color: var(--green); flex-shrink: 0; }
+    .toast-icon svg { width: 20px; height: 20px; }
+    .toast-text strong { display: block; font-size: 0.82rem; color: var(--text); font-family: 'Syne', sans-serif; }
+    .toast-text span { font-size: 0.7rem; color: var(--muted); }
+
+    .section-label { font-size: 0.68rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+    .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+    #fileList { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+    .file-item { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s ease; animation: fadeUp 0.3s ease both; }
+    .file-item:nth-child(1){animation-delay:.03s} .file-item:nth-child(2){animation-delay:.06s}
+    .file-item:nth-child(3){animation-delay:.09s} .file-item:nth-child(4){animation-delay:.12s}
+    .file-item:nth-child(5){animation-delay:.15s}
+    @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .file-item:hover { background: var(--surface2); border-color: rgba(79,140,255,0.25); transform: translateX(3px); box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
+    .file-icon { width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+    .file-icon svg { width:18px;height:18px; }
+    .icon-folder{background:rgba(251,191,36,.12);color:#fbbf24} .icon-image{background:rgba(52,211,153,.12);color:#34d399}
+    .icon-pdf{background:rgba(248,113,113,.12);color:#f87171}   .icon-doc{background:rgba(79,140,255,.12);color:#4f8cff}
+    .icon-sheet{background:rgba(52,211,153,.12);color:#34d399}  .icon-slide{background:rgba(251,146,60,.12);color:#fb923c}
+    .icon-video{background:rgba(167,139,250,.12);color:#a78bfa} .icon-audio{background:rgba(251,191,36,.12);color:#fbbf24}
+    .icon-zip{background:rgba(156,163,175,.12);color:#9ca3af}   .icon-code{background:rgba(52,211,153,.12);color:#34d399}
+    .icon-file{background:rgba(107,114,128,.10);color:#6b7280}
+    .file-info { flex:1;min-width:0; }
+    .file-name { font-size:.82rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .file-meta { font-size:.68rem;color:var(--muted);margin-top:2px; }
+    .file-arrow { color:var(--muted);transition:color .2s,transform .2s;flex-shrink:0; }
+    .file-item:hover .file-arrow { color:var(--accent);transform:translateX(3px); }
+    .empty-state { text-align:center;padding:48px 24px;color:var(--muted);font-size:.8rem;list-style:none; }
+    .empty-state svg { width:40px;height:40px;margin:0 auto 12px;display:block;opacity:.3; }
+  </style>
+</head>
+<body>
+
+<div class="drop-overlay" id="dropOverlay">
+  <div class="drop-box">
+    <div class="drop-box-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+      </svg>
+    </div>
+    <h2>Upload to Drive</h2>
+    <p>Release to upload directly to your folder</p>
+    <div class="drop-hint">ESC to cancel</div>
+  </div>
+</div>
+
+<div class="toast" id="toast">
+  <div class="toast-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></div>
+  <div class="toast-text">
+    <strong>Upload complete</strong>
+    <span id="toastMsg"></span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="header">
+    <div class="header-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+      </svg>
+    </div>
+    <div class="header-text">
+      <h1>Drive Viewer</h1>
+      <p>Google Drive — Live Sync</p>
+    </div>
+    <div class="status-dot"></div>
+  </div>
+
+  <div class="upload-queue" id="uploadQueue"></div>
+  <div class="section-label">Drive Contents</div>
+  <ul id="fileList">
+    <li class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Connecting to Drive…
+    </li>
+  </ul>
+</div>
+
+<script>
+  const CLIENT_ID = '608102270412-d1tjhndp3q70b1huig7ulqdmh4uobi5i.apps.googleusercontent.com';
+  const API_KEY   = 'AIzaSyDWC0fqICusytSBgOqFqtQx0EGpVGP5AFY';
+  const SCOPES    = 'https://www.googleapis.com/auth/drive.file';
+  const FOLDER_ID = '1ET36NM5uLHZ5OS1ZsVRN3kN0NOaEyvbL';
+
+  let lastFileIds = new Set();
+  let tokenClient = null;
+  let accessToken = null;
+  let pendingFiles = [];
+
+  // ── Icons ──────────────────────────────────────────────────────────────────
+  const ICONS = {
+    folder:`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/></svg>`,
+    image: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
+    pdf:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>`,
+    doc:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>`,
+    sheet: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>`,
+    slide: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`,
+    video: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
+    audio: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
+    zip:   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+    code:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
+    file:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
+    arrow: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="9 18 15 12 9 6"/></svg>`,
+    close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  };
+
+  function getIconClass(mime='') {
+    if (mime==='application/vnd.google-apps.folder') return 'icon-folder';
+    if (mime.startsWith('image/')) return 'icon-image';
+    if (mime==='application/pdf') return 'icon-pdf';
+    if (mime.includes('spreadsheet')||mime.includes('excel')||mime.includes('csv')) return 'icon-sheet';
+    if (mime.includes('presentation')||mime.includes('powerpoint')) return 'icon-slide';
+    if (mime.includes('document')||mime.includes('word')||mime.includes('text')) return 'icon-doc';
+    if (mime.startsWith('video/')) return 'icon-video';
+    if (mime.startsWith('audio/')) return 'icon-audio';
+    if (mime.includes('zip')||mime.includes('rar')||mime.includes('tar')) return 'icon-zip';
+    if (mime.includes('javascript')||mime.includes('json')||mime.includes('html')||mime.includes('css')) return 'icon-code';
+    return 'icon-file';
+  }
+  function getIconSVG(mime='') {
+    if (mime==='application/vnd.google-apps.folder') return ICONS.folder;
+    if (mime.startsWith('image/')) return ICONS.image;
+    if (mime==='application/pdf') return ICONS.pdf;
+    if (mime.includes('spreadsheet')||mime.includes('excel')||mime.includes('csv')) return ICONS.sheet;
+    if (mime.includes('presentation')||mime.includes('powerpoint')) return ICONS.slide;
+    if (mime.includes('document')||mime.includes('word')||mime.includes('text')) return ICONS.doc;
+    if (mime.startsWith('video/')) return ICONS.video;
+    if (mime.startsWith('audio/')) return ICONS.audio;
+    if (mime.includes('zip')||mime.includes('rar')||mime.includes('tar')) return ICONS.zip;
+    if (mime.includes('javascript')||mime.includes('json')||mime.includes('html')||mime.includes('css')) return ICONS.code;
+    return ICONS.file;
+  }
+  function getTypeName(mime='') {
+    if (mime==='application/vnd.google-apps.folder') return 'Folder';
+    if (mime.startsWith('image/')) return 'Image';
+    if (mime==='application/pdf') return 'PDF';
+    if (mime.includes('spreadsheet')||mime.includes('excel')) return 'Spreadsheet';
+    if (mime.includes('presentation')) return 'Presentation';
+    if (mime.includes('document')||mime.includes('word')) return 'Document';
+    if (mime.startsWith('video/')) return 'Video';
+    if (mime.startsWith('audio/')) return 'Audio';
+    if (mime.includes('zip')||mime.includes('rar')) return 'Archive';
+    return 'File';
+  }
+  function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1048576).toFixed(1) + ' MB';
+  }
+
+  // ── GAPI init (same as your reference) ────────────────────────────────────
+  function gapiInit() {
+    return new Promise((resolve, reject) => {
+      gapi.load('client', async () => {
+        try {
+          await gapi.client.init({
+            apiKey: API_KEY,
+            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+          });
+          resolve();
+        } catch(e) { reject(e); }
+      });
+    });
+  }
+
+  // ── GIS token client (same as your reference) ──────────────────────────────
+  function gisInit() {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: (response) => {
+        if (response.error) {
+          console.error('Token error', response);
+          pendingFiles.forEach(({ el }) => setItemState(el, 'error', 'Auth failed'));
+          pendingFiles = [];
+          return;
+        }
+        accessToken = response.access_token;
+        // Upload all files that were waiting on auth
+        const toUpload = [...pendingFiles];
+        pendingFiles = [];
+        uploadBatch(toUpload);
+      }
+    });
+  }
+
+  // ── Drive file list fetch ──────────────────────────────────────────────────
+  async function fetchFiles() {
+    try {
+      const response = await gapi.client.drive.files.list({
+        q: `'${FOLDER_ID}' in parents and trashed = false`,
+        fields: 'files(id, name, mimeType, webViewLink, iconLink)',
+        orderBy: 'folder,name'
+      });
+      const files = response.result.files;
+      const currentFileIds = new Set(files.map(f => f.id));
+      const isChanged = files.length !== lastFileIds.size || [...currentFileIds].some(id => !lastFileIds.has(id));
+      if (!isChanged) return;
+      lastFileIds = currentFileIds;
+
+      const fileList = document.getElementById('fileList');
+      fileList.innerHTML = '';
+
+      if (!files.length) {
+        fileList.innerHTML = `<li class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          This folder is empty</li>`;
+        return;
+      }
+
+      files.forEach(file => {
+        const li = document.createElement('li');
+        li.className = 'file-item';
+        li.innerHTML = `
+          <div class="file-icon ${getIconClass(file.mimeType)}">${getIconSVG(file.mimeType)}</div>
+          <div class="file-info">
+            <div class="file-name">${file.name}</div>
+            <div class="file-meta">${getTypeName(file.mimeType)}</div>
+          </div>
+          <div class="file-arrow">${ICONS.arrow}</div>`;
+        li.addEventListener('click', () => window.open(file.webViewLink, '_blank'));
+        fileList.appendChild(li);
+      });
+    } catch(err) { console.error('Fetch error:', err); }
+  }
+
+  // ── Upload (same flow as your reference) ──────────────────────────────────
+  async function uploadFile(file) {
+    const metadata = {
+      name: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      parents: [FOLDER_ID]
+    };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', file);
+
+    const response = await fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+      { method: 'POST', headers: { 'Authorization': 'Bearer ' + accessToken }, body: form }
+    );
+    if (!response.ok) throw new Error(`Upload failed: ${response.statusText}`);
+    return response.json();
+  }
+
+  async function uploadBatch(batch) {
+    let successCount = 0;
+    for (const { file, el } of batch) {
+      setItemState(el, 'uploading');
+      try {
+        await uploadFile(file);
+        setItemState(el, 'done');
+        successCount++;
+      } catch(e) {
+        console.error(e);
+        setItemState(el, 'error', 'Upload failed');
+      }
+    }
+    if (successCount > 0) {
+      showToast(successCount === 1 ? '1 file uploaded successfully' : `${successCount} files uploaded`);
+      setTimeout(fetchFiles, 1500);
+    }
+  }
+
+  // Trigger auth (shows account picker popup, same as your reference's requestAccessToken)
+  function requestUpload(files) {
+    const batch = files.map(file => ({ file, el: createUploadItem(file) }));
+
+    if (accessToken) {
+      uploadBatch(batch);
+    } else {
+      batch.forEach(({ el }) => setItemState(el, 'waiting', 'Waiting for sign-in…'));
+      pendingFiles.push(...batch);
+      tokenClient.requestAccessToken(); // ← exact same call as your reference
+    }
+  }
+
+  // ── UI helpers ─────────────────────────────────────────────────────────────
+  function setItemState(el, state, msg) {
+    const statusEl = el.querySelector('.upload-item-status');
+    const badgeEl  = el.querySelector('.upload-item-badge');
+    const barEl    = el.querySelector('.upload-item-bar');
+    if (state === 'uploading') {
+      statusEl.textContent = 'Uploading…';
+      badgeEl.className = 'upload-item-badge badge-uploading'; badgeEl.textContent = 'Uploading';
+      barEl.style.width = '60%';
+    } else if (state === 'done') {
+      el.classList.add('success');
+      statusEl.textContent = 'Uploaded successfully';
+      badgeEl.className = 'upload-item-badge badge-done'; badgeEl.textContent = '✓ Done';
+      barEl.style.width = '100%'; barEl.style.background = 'var(--green)';
+    } else if (state === 'error') {
+      el.classList.add('error');
+      statusEl.textContent = msg || 'Failed';
+      badgeEl.className = 'upload-item-badge badge-error'; badgeEl.textContent = '✕ Error';
+      barEl.style.width = '100%'; barEl.style.background = 'var(--danger)';
+    } else if (state === 'waiting') {
+      statusEl.textContent = msg || 'Waiting for sign-in…';
+      badgeEl.className = 'upload-item-badge badge-waiting'; badgeEl.textContent = 'Sign-in';
+    }
+  }
+
+  function createUploadItem(file) {
+    const el = document.createElement('div');
+    el.className = 'upload-item';
+    el.innerHTML = `
+      <div class="upload-item-icon ${getIconClass(file.type)}">${getIconSVG(file.type)}</div>
+      <div class="upload-item-info">
+        <div class="upload-item-name" title="${file.name}">${file.name}</div>
+        <div class="upload-item-status">${formatSize(file.size)}</div>
+        <div class="upload-item-bar-wrap"><div class="upload-item-bar"></div></div>
+      </div>
+      <span class="upload-item-badge badge-waiting">Queued</span>
+      <button class="upload-item-remove" title="Dismiss">${ICONS.close}</button>`;
+    el.querySelector('.upload-item-remove').addEventListener('click', () => {
+      el.style.opacity = '0'; el.style.transform = 'translateX(-8px)'; el.style.transition = 'all 0.2s';
+      setTimeout(() => el.remove(), 200);
+    });
+    document.getElementById('uploadQueue').appendChild(el);
+    return el;
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 4000);
+  }
+
+  // ── Drag & Drop ────────────────────────────────────────────────────────────
+  const overlay = document.getElementById('dropOverlay');
+  let dragCounter = 0;
+
+  window.addEventListener('dragenter', e => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragCounter++;
+    overlay.classList.add('visible');
+  });
+  window.addEventListener('dragleave', e => {
+    dragCounter--;
+    if (dragCounter <= 0) { dragCounter = 0; overlay.classList.remove('visible', 'over'); }
+  });
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => {
+    e.preventDefault();
+    dragCounter = 0;
+    overlay.classList.remove('visible', 'over');
+    const files = [...e.dataTransfer.files];
+    if (files.length) requestUpload(files); // triggers account picker then uploads
+  });
+
+  overlay.addEventListener('dragenter', () => overlay.classList.add('over'));
+  overlay.addEventListener('dragleave', e => { if (e.target === overlay) overlay.classList.remove('over'); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { dragCounter = 0; overlay.classList.remove('visible', 'over'); }
+  });
+
+  // ── Boot (same as your reference) ─────────────────────────────────────────
+  window.onload = async () => {
+    await gapiInit();
+    fetchFiles();
+    setInterval(fetchFiles, 5000);
+
+    if (window.google && google.accounts && google.accounts.oauth2) {
+      gisInit();
+    } else {
+      // Wait for GIS script to load
+      document.querySelector('script[src*="gsi/client"]').addEventListener('load', gisInit);
+    }
+  };
+</script>
+</body>
+</html>
